@@ -127,6 +127,7 @@ jobs:
             release/*.zip
             release/*.blockmap
             release/*.yml
+            !release/builder-debug.yml
 
   publish:
     name: Publish GitHub release
