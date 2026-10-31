@@ -1,9 +1,8 @@
 name: Fork CI
 
+# Pushes to fork run this through fork-release.yml.
 on:
   pull_request:
-  push:
-    branches: [fork]
   workflow_call:
 
 permissions:

@@ -1,9 +1,8 @@
 name: Fork release
 
 on:
-  schedule:
-    - cron: "17 6 * * *"
   push:
+    branches: [fork]
     tags: ["fork-v*.*.*"]
   workflow_dispatch:
     inputs:
@@ -29,46 +28,35 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
-      skip: ${{ steps.v.outputs.skip }}
     steps:
       - uses: actions/checkout@v5
         with:
           sparse-checkout: apps/desktop/package.json
       - id: v
         env:
-          GH_TOKEN: ${{ github.token }}
-          EVENT: ${{ github.event_name }}
           INPUT_CHANNEL: ${{ inputs.channel }}
           INPUT_VERSION: ${{ inputs.version }}
+          REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           base="$(jq -r .version apps/desktop/package.json)"
-          skip=false
-          if [[ "$EVENT" == "push" ]]; then
+          if [[ "$REF_TYPE" == "tag" ]]; then
             version="${REF_NAME#fork-v}"
-          elif [[ "$EVENT" == "workflow_dispatch" && "$INPUT_CHANNEL" == "stable" ]]; then
+          elif [[ "$INPUT_CHANNEL" == "stable" ]]; then
             version="${INPUT_VERSION:-$base}"
           else
             version="${base}-nightly.$(date -u +%Y%m%d).${GITHUB_RUN_NUMBER}"
-            last="$(gh release list -R "$GITHUB_REPOSITORY" --json tagName,isPrerelease \
-              --jq '[.[] | select(.isPrerelease and (.tagName | test("-nightly\\.")))][0].tagName // ""')"
-            if [[ "$EVENT" == "schedule" && -n "$last" ]]; then
-              last_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$last" --jq .sha)"
-              [[ "$last_sha" == "$GITHUB_SHA" ]] && skip=true
-            fi
           fi
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-nightly\.[0-9]{8}\.[0-9]+)?$ ]]; then
             echo "Invalid version: $version" >&2
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "skip=$skip" >> "$GITHUB_OUTPUT"
-          echo "Version $version (skip=$skip)"
+          echo "Version $version"
 
   ci:
     needs: prepare
-    if: needs.prepare.outputs.skip != 'true'
     uses: ./.github/workflows/fork-ci.yml
 
   build:
