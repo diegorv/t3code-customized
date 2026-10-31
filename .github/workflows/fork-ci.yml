@@ -48,10 +48,15 @@ jobs:
       - run: vp run --filter @t3tools/desktop ensure:electron
       - run: vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!@t3tools/monorepo' --filter '!@t3tools/web' test
 
+  # Shard so free 4-vCPU runners do not starve the long browser PDF tests.
   test-web:
-    name: Test web
+    name: Test web ${{ matrix.shard }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -61,8 +66,10 @@ jobs:
           sparse-checkout-cone-mode: false
       - uses: ./.github/actions/setup-ci-deps
       - run: node apps/web/node_modules/playwright/cli.js install --with-deps --only-shell chromium
-      - run: vp run --filter @t3tools/web test
+      - working-directory: apps/web
+        run: vp test run --passWithNoTests --project unit --project browser --shard=${{ matrix.shard }}/3
       - name: Boot the built web client
+        if: matrix.shard == 1
         run: |
           vp run --filter @t3tools/web build
           node apps/web/scripts/verify-built-boot.ts
